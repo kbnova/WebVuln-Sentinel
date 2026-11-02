@@ -1,0 +1,2 @@
+# Add only websites that you own or have explicit permission to assess.
+https://example.com

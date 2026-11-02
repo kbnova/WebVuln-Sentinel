@@ -1,0 +1,7 @@
+{
+    "authorized_domains": [],
+    "allow_subdomains": false,
+    "max_targets": 10,
+    "request_timeout": 8,
+    "follow_redirects": false
+}
