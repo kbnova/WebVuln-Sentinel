@@ -49,17 +49,27 @@ WebVuln-Sentinel/
 │   ├── version_checker.py
 │   ├── cve_checker.py
 │   ├── risk_analyzer.py
-│   └── report_generator.py
+│   ├── report_generator.py
+│   │
+│   ├── detection/
+│   │   ├── __init__.py
+│   │   └── php_fingerprints.py
+│   │
+│   └── discovery/
+│       ├── __init__.py
+│       ├── base.py
+│       ├── discovery_engine.py
+│       └── crtsh_provider.py
 │
 ├── config/
 │   └── scope.json
 │
+├── dashboard/
+│   └── dashboard.py
+│
 ├── data/
 │   ├── targets.txt
 │   └── vulnerability_rules.json
-│
-├── dashboard/
-│   └── dashboard.py
 │
 ├── docs/
 │   └── architecture.md
@@ -67,15 +77,20 @@ WebVuln-Sentinel/
 ├── reports/
 │
 ├── tests/
+│   ├── test_scanner.py
 │   ├── test_php_detector.py
+│   ├── test_php_fingerprints.py
 │   ├── test_version_checker.py
 │   ├── test_cve_checker.py
-│   ├── test_scanner.py
-│   └── test_report_generator.py
+│   ├── test_report_generator.py
+│   ├── test_discovery.py
+│   └── test_discovery_engine.py
 │
-├── pytest.ini
+├── .gitignore
+├── README.md
 ├── requirements.txt
-└── README.md
+└── pytest.ini
+
 ```
 
 ## Installation
