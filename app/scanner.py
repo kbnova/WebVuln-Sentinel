@@ -5,7 +5,7 @@ import ipaddress
 import json
 import socket
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -291,6 +291,65 @@ def validate_url(url, scope):
 
 
 # --------------------------------------------------
+# Redirect Inspection
+# --------------------------------------------------
+
+def inspect_redirect(original_url, response, scope):
+    """
+    Inspect a redirect destination without following it.
+
+    The destination must pass the same authorization and
+    public-IP validation as an initial scanning target.
+    """
+
+    if not response.is_redirect:
+        return {
+            "redirect_detected": False,
+            "redirect_url": None,
+            "redirect_scope_status": "NOT_A_REDIRECT",
+            "redirect_reason": None,
+        }
+
+    location = response.headers.get("Location")
+
+    if not location:
+        return {
+            "redirect_detected": True,
+            "redirect_url": None,
+            "redirect_scope_status": "NO_LOCATION",
+            "redirect_reason": "Redirect response has no Location header.",
+        }
+
+    try:
+        destination = urljoin(original_url, location)
+
+        authorized, reason = validate_url(destination, scope)
+
+        if not authorized:
+            return {
+                "redirect_detected": True,
+                "redirect_url": destination,
+                "redirect_scope_status": "BLOCKED_DESTINATION",
+                "redirect_reason": reason,
+            }
+
+        return {
+            "redirect_detected": True,
+            "redirect_url": destination,
+            "redirect_scope_status": "AUTHORIZED_DESTINATION",
+            "redirect_reason": None,
+        }
+
+    except (ValueError, UnicodeError) as error:
+        return {
+            "redirect_detected": True,
+            "redirect_url": None,
+            "redirect_scope_status": "BLOCKED_DESTINATION",
+            "redirect_reason": f"Invalid redirect destination: {error}",
+        }
+
+
+# --------------------------------------------------
 # Limited HTTP Response Reader
 # --------------------------------------------------
 
@@ -355,7 +414,7 @@ def scan_website(url, scope=None):
     Perform one low-impact HTTP GET request against
     an explicitly authorized website.
 
-    Redirects are not followed.
+    Redirects are inspected but never followed.
     This function does not exploit vulnerabilities.
     """
 
@@ -391,6 +450,12 @@ def scan_website(url, scope=None):
 
                 # Step 4: Collect response evidence.
                 headers = dict(response.headers)
+
+                redirect_info = inspect_redirect(
+                    url,
+                    response,
+                    scope,
+                )
 
                 body = read_limited_response(response)
 
@@ -455,7 +520,13 @@ def scan_website(url, scope=None):
                     "website": url,
                     "scan_status": "COMPLETED",
                     "http_status": response.status_code,
-                    "redirect_detected": response.is_redirect,
+
+                    "redirect_detected": redirect_info["redirect_detected"],
+                    "redirect_url": redirect_info["redirect_url"],
+                    "redirect_scope_status": redirect_info[
+                        "redirect_scope_status"
+                    ],
+                    "redirect_reason": redirect_info["redirect_reason"],
 
                     "php_detected": detection["php_detected"],
                     "php_classification": detection["classification"],

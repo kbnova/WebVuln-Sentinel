@@ -4,6 +4,7 @@ import socket
 import pytest
 
 import app.scanner as scanner
+from types import SimpleNamespace
 
 from app.scanner import (
     create_http_session,
@@ -174,3 +175,96 @@ def test_scan_website_rejects_invalid_target():
 
     assert result["scan_status"] == "REJECTED"
     assert result["vulnerability_status"] == "NOT_SCANNED"
+# --------------------------------------------------
+# Redirect Inspection Tests
+# --------------------------------------------------
+
+def test_inspect_redirect_detects_no_redirect():
+    response = SimpleNamespace(
+        is_redirect=False,
+        headers={},
+    )
+
+    result = scanner.inspect_redirect(
+        "https://example.com",
+        response,
+        {},
+    )
+
+    assert result["redirect_detected"] is False
+    assert result["redirect_scope_status"] == "NOT_A_REDIRECT"
+
+
+def test_inspect_redirect_blocks_external_domain():
+    scope = {
+        "authorized_domains": ["example.com"],
+        "allow_subdomains": True,
+    }
+
+    response = SimpleNamespace(
+        is_redirect=True,
+        headers={
+            "Location": "https://another-domain.com/login",
+        },
+    )
+
+    result = scanner.inspect_redirect(
+        "https://example.com",
+        response,
+        scope,
+    )
+
+    assert result["redirect_detected"] is True
+    assert result["redirect_scope_status"] == "BLOCKED_DESTINATION"
+    assert "authorized scope" in result["redirect_reason"]
+
+
+def test_inspect_redirect_allows_authorized_relative_destination(monkeypatch):
+    scope = {
+        "authorized_domains": ["example.com"],
+        "allow_subdomains": True,
+    }
+
+    monkeypatch.setattr(
+        scanner,
+        "is_public_host",
+        lambda hostname: True,
+    )
+
+    response = SimpleNamespace(
+        is_redirect=True,
+        headers={"Location": "/login"},
+    )
+
+    result = scanner.inspect_redirect(
+        "https://example.com/account",
+        response,
+        scope,
+    )
+
+    assert result["redirect_detected"] is True
+    assert result["redirect_url"] == "https://example.com/login"
+    assert result["redirect_scope_status"] == "AUTHORIZED_DESTINATION"
+
+
+def test_inspect_redirect_blocks_private_ip_destination():
+    scope = {
+        "authorized_domains": ["192.168.1.10"],
+        "allow_subdomains": False,
+    }
+
+    response = SimpleNamespace(
+        is_redirect=True,
+        headers={
+            "Location": "http://192.168.1.10/admin",
+        },
+    )
+
+    result = scanner.inspect_redirect(
+        "https://example.com",
+        response,
+        scope,
+    )
+
+    assert result["redirect_detected"] is True
+    assert result["redirect_scope_status"] == "BLOCKED_DESTINATION"
