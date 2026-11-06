@@ -30,13 +30,51 @@ def test_identifies_php_session_cookie():
     assert "PHP session cookie" in result["strong_indicators"]
 
 
-def test_identifies_php_runtime_error():
+def test_cookie_evidence_does_not_expose_session_value():
+    result = identify_php({
+        "Set-Cookie": "PHPSESSID=secret-session-token; Path=/"
+    })
+
+    cookie_evidence = [
+        item for item in result["evidence"]
+        if item["source"] == "HTTP cookie"
+    ]
+
+    assert cookie_evidence
+    assert "secret-session-token" not in str(cookie_evidence)
+
+
+def test_identifies_php_runtime_error_with_php_file_reference():
     result = identify_php(
         headers={},
-        body="Fatal error: Uncaught Error in /var/www/index.php"
+        body="Fatal error: Uncaught Error in /var/www/index.php on line 10"
     )
 
     assert result["classification"] == "PHP_INDICATED"
+    assert (
+        "PHP runtime error with .php file reference"
+        in result["strong_indicators"]
+    )
+
+
+def test_generic_fatal_error_is_not_php_evidence():
+    result = identify_php(
+        headers={},
+        body="Fatal error: Something went wrong."
+    )
+
+    assert result["classification"] == "NOT_DETECTED"
+    assert result["php_detected"] is False
+
+
+def test_generic_parse_error_is_not_php_evidence():
+    result = identify_php(
+        headers={},
+        body="Parse error: Unexpected input."
+    )
+
+    assert result["classification"] == "NOT_DETECTED"
+    assert result["php_detected"] is False
 
 
 def test_identifies_possible_wordpress():

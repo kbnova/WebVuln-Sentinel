@@ -10,41 +10,32 @@ import re
 
 PHP_VERSION_PATTERN = re.compile(
     r"\bPHP\s*/?\s*(\d+\.\d+\.\d+)\b",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
-PHP_ERROR_PATTERNS = {
-    "PHP fatal error": re.compile(
-        r"\bFatal error\s*:",
-        re.IGNORECASE
-    ),
-    "PHP warning": re.compile(
-        r"\bWarning\s*:.*?\bin\s+.+?\bon\s+line\s+\d+",
-        re.IGNORECASE
-    ),
-    "PHP parse error": re.compile(
-        r"\bParse error\s*:",
-        re.IGNORECASE
-    ),
-    "PHP uncaught exception": re.compile(
-        r"\bUncaught\s+(?:Error|Exception)\b",
-        re.IGNORECASE
-    )
-}
+# A PHP runtime error is useful evidence only when it is
+# accompanied by a PHP file reference.
+PHP_RUNTIME_ERROR_PATTERN = re.compile(
+    r"\b(?:Fatal error|Parse error|Warning|Uncaught\s+(?:Error|Exception))\b"
+    r".{0,500}?\b[^\s\"'<>]*\.php(?:\b|[?#])",
+    re.IGNORECASE | re.DOTALL,
+)
+
+PHP_FILE_REFERENCE_PATTERN = re.compile(
+    r"""(?:href|src|action)\s*=\s*["'][^"']*\.php(?:[?#][^"']*)?["']""",
+    re.IGNORECASE,
+)
 
 WEAK_BODY_PATTERNS = {
     "WordPress content directory": re.compile(
         r"wp-content/",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
     "WordPress includes directory": re.compile(
         r"wp-includes/",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
-    "PHP file reference": re.compile(
-        r"""(?:href|src|action)\s*=\s*["'][^"']*\.php(?:[?#][^"']*)?["']""",
-        re.IGNORECASE
-    )
+    "PHP file reference": PHP_FILE_REFERENCE_PATTERN,
 }
 
 
@@ -72,7 +63,7 @@ def identify_php(headers=None, body=""):
     php_version = None
     version_source = None
 
-    # Check headers for explicit PHP identification.
+    # Check HTTP headers for explicit PHP identification.
     for header_name in ("x-powered-by", "server", "x-php-version"):
         value = normalized_headers.get(header_name, "")
 
@@ -83,7 +74,7 @@ def identify_php(headers=None, body=""):
                 "indicator": header_name,
                 "source": "HTTP header",
                 "value": value[:200],
-                "strength": "STRONG"
+                "strength": "STRONG",
             })
 
             match = PHP_VERSION_PATTERN.search(value)
@@ -92,34 +83,45 @@ def identify_php(headers=None, body=""):
                 php_version = match.group(1)
                 version_source = header_name
 
-    # Check for PHP session cookies.
-    cookie_text = " ".join(
-        value
-        for key, value in normalized_headers.items()
-        if key in ("set-cookie", "cookie")
-    )
+    # Check cookie names only. Never include cookie values,
+    # because they may contain session tokens.
+    cookie_names = []
 
-    if re.search(r"\bPHPSESSID\b", cookie_text, re.IGNORECASE):
+    for header_name in ("set-cookie", "cookie"):
+        cookie_text = normalized_headers.get(header_name, "")
+
+        for part in cookie_text.split(";"):
+            cookie_name = part.strip().split("=", 1)[0].strip()
+
+            if cookie_name:
+                cookie_names.append(cookie_name)
+
+    if any(
+        name.lower() == "phpsessid"
+        for name in cookie_names
+    ):
         strong_indicators.append("PHP session cookie")
 
         evidence.append({
             "indicator": "PHP session cookie",
             "source": "HTTP cookie",
             "value": "PHPSESSID",
-            "strength": "STRONG"
+            "strength": "STRONG",
         })
 
-    # Check for characteristic PHP runtime error messages.
-    for label, pattern in PHP_ERROR_PATTERNS.items():
-        if pattern.search(body):
-            strong_indicators.append(label)
+    # A runtime error counts only when a PHP file reference
+    # appears in the same error context.
+    if PHP_RUNTIME_ERROR_PATTERN.search(body):
+        indicator = "PHP runtime error with .php file reference"
 
-            evidence.append({
-                "indicator": label,
-                "source": "HTTP response body",
-                "value": label,
-                "strength": "STRONG"
-            })
+        strong_indicators.append(indicator)
+
+        evidence.append({
+            "indicator": indicator,
+            "source": "HTTP response body",
+            "value": "PHP runtime error and .php file reference",
+            "strength": "STRONG",
+        })
 
     # Check weaker technology fingerprints.
     for label, pattern in WEAK_BODY_PATTERNS.items():
@@ -130,7 +132,7 @@ def identify_php(headers=None, body=""):
                 "indicator": label,
                 "source": "HTTP response body",
                 "value": label,
-                "strength": "WEAK"
+                "strength": "WEAK",
             })
 
     if strong_indicators:
@@ -152,5 +154,5 @@ def identify_php(headers=None, body=""):
         "strong_indicators": strong_indicators,
         "weak_indicators": weak_indicators,
         "evidence": evidence,
-        "vulnerability_confirmed": False
+        "vulnerability_confirmed": False,
     }

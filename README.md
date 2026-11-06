@@ -1,40 +1,83 @@
-
 # WebVuln Sentinel
 
 ### Passive PHP Security Assessment Scanner
 
-WebVuln Sentinel is a Python-based security assessment tool
-designed to identify publicly exposed PHP version information
-on authorized websites and compare it against configured
-security advisories.
+WebVuln Sentinel is a Python-based passive security assessment tool designed to identify publicly exposed PHP version information on authorized websites and compare detected versions against configured security advisories.
 
-It provides preliminary security assessments and generates
-structured JSON reports with an interactive Streamlit dashboard.
+The project uses HTTP response analysis, PHP fingerprint detection, version comparison, and preliminary risk classification to generate structured JSON security assessment reports.
 
-**Important:** A potential version match is not proof that a
-website is vulnerable. The tool does not perform exploitation.
+It also provides an interactive Streamlit dashboard for reviewing scan results.
+
+**Important:** A detected version match indicates a potential security concern, not proof that a website is exploitable. The scanner does not perform exploitation or intrusive vulnerability verification.
 
 ---
 
 ## Features
 
-- Authorized-domain validation.
-- HTTP response analysis.
-- PHP version detection.
-- PHP security advisory and CVE matching.
-- Preliminary risk classification.
-- JSON report generation.
-- Interactive Streamlit dashboard.
-- Automated testing with pytest.
+### 1. Authorized Target Validation
+- Validates target domains against configured authorization rules.
+- Restricts scanning to explicitly authorized domains.
+- Supports configurable subdomain and target-count restrictions.
+
+### 2. Safe HTTP Assessment
+- Analyzes HTTP responses from authorized targets.
+- Uses DNS resolution checks and IP validation.
+- Pins connections to validated IP addresses to reduce DNS-rebinding risks.
+- Applies request timeouts and redirect limits.
+
+### 3. Redirect Scope Protection
+- Follows redirects only when the destination is authorized.
+- Records out-of-scope redirect destinations.
+- Stops scanning when a redirect leads outside the authorized scope.
+- Records whether a redirect was followed.
+
+### 4. PHP Fingerprint Detection
+- Identifies PHP indicators from HTTP response headers.
+- Checks PHP-related cookie names without exposing cookie values.
+- Analyzes PHP-specific file references and runtime evidence.
+- Avoids treating generic fatal or parse errors alone as proof of PHP.
+
+### 5. Vulnerability Assessment
+- Compares detected PHP versions against configured security rules.
+- Assesses individual CVE advisories independently.
+- Identifies configured end-of-life PHP branches.
+- Flags older branches requiring vendor verification.
+
+### 6. Preliminary Risk Classification
+- Classifies findings into risk categories.
+- Distinguishes potential version matches from confirmed vulnerabilities.
+- Accounts for uncertainty and vendor backported security fixes.
+
+### 7. JSON Reporting
+- Generates structured JSON assessment reports.
+- Saves each scan as a separate timestamped report.
+- Preserves previous scan reports instead of overwriting them.
+
+### 8. Interactive Dashboard
+- Displays scan summaries and risk classifications.
+- Shows PHP version and detection evidence.
+- Displays relevant HTTP header and cookie-name evidence.
+- Presents individual CVE assessment results.
+- Shows redirect information and report details.
+
+### 9. Automated Testing
+- Includes automated unit and integration-style tests using pytest.
+- Tests target validation, PHP detection, CVE assessment, redirects, and report generation.
+
+---
 
 ## Technology Stack
 
-- Python
-- Requests
-- Streamlit
-- Pandas
-- Pytest
-- JSON
+| Technology | Purpose |
+|---|---|
+| Python | Core application and scanner |
+| Requests | HTTP communication |
+| Streamlit | Interactive dashboard |
+| Pandas | Dashboard data handling |
+| JSON | Configuration, vulnerability rules, and reports |
+| Pytest | Automated testing |
+
+---
 
 ## Project Structure
 
@@ -45,7 +88,6 @@ WebVuln-Sentinel/
 │   ├── __init__.py
 │   ├── main.py
 │   ├── scanner.py
-│   ├── php_detector.py
 │   ├── version_checker.py
 │   ├── cve_checker.py
 │   ├── risk_analyzer.py
@@ -75,10 +117,10 @@ WebVuln-Sentinel/
 │   └── architecture.md
 │
 ├── reports/
+│   └── (generated JSON reports)
 │
 ├── tests/
 │   ├── test_scanner.py
-│   ├── test_php_detector.py
 │   ├── test_php_fingerprints.py
 │   ├── test_version_checker.py
 │   ├── test_cve_checker.py
@@ -90,28 +132,29 @@ WebVuln-Sentinel/
 ├── README.md
 ├── requirements.txt
 └── pytest.ini
-
 ```
+
+---
 
 ## Installation
 
 ### 1. Clone the repository
 
 ```bash
-git clone YOUR_GITHUB_REPOSITORY_URL
+git clone https://github.com/kbnova/WebVuln-Sentinel.git
 cd WebVuln-Sentinel
 ```
 
 ### 2. Create a virtual environment
 
-Windows:
+**Windows PowerShell:**
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-Linux/macOS:
+**Linux/macOS:**
 
 ```bash
 python3 -m venv .venv
@@ -124,53 +167,82 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
+---
+
 ## Configuration
 
 ### 1. Configure authorized domains
 
-Edit `config/scope.json`:
+Edit:
+
+```text
+config/scope.json
+```
+
+Add only domains that you own or have explicit permission to assess.
+
+Example:
 
 ```json
 {
     "authorized_domains": [
         "your-authorized-domain.com"
-    ],
-    "allow_subdomains": false,
-    "max_targets": 10,
-    "request_timeout": 8,
-    "follow_redirects": false
+    ]
 }
 ```
 
-Replace the example domain with a domain you own or have
-explicit permission to assess.
+**Note:** This is an illustrative example, not a replacement for your existing configuration. Preserve the other settings required by your scanner.
 
 ### 2. Add target URLs
 
-Edit `data/targets.txt`:
+Edit:
+
+```text
+data/targets.txt
+```
+
+Example:
 
 ```text
 https://your-authorized-domain.com
 ```
 
-Only add authorized targets.
+Only include authorized target URLs.
+
+---
 
 ## Running the Scanner
 
-From the project root:
+Run the scanner from the project root:
 
 ```bash
 python -m app.main
 ```
 
-The scanner will process the configured targets and generate
-a JSON assessment report.
+The scanner processes the configured targets and generates a structured JSON assessment report.
 
-Report location:
+### Report Storage
+
+Reports are stored in:
 
 ```text
-reports/results.json
+reports/
 ```
+
+Each scan generates a separate timestamped JSON file.
+
+Example:
+
+```text
+reports/
+├── scan_20261105_120000_123456.json
+├── scan_20261105_130000_456789.json
+└── scan_20261105_140000_789012.json
+```
+
+The actual filenames are generated automatically. Existing reports are preserved.
+
+---
 
 ## Running the Dashboard
 
@@ -180,65 +252,103 @@ Start the Streamlit dashboard:
 streamlit run dashboard/dashboard.py
 ```
 
-Open the local address displayed in your terminal,
-usually:
+Open the local address displayed in your terminal, usually:
 
 ```text
 http://localhost:8501
 ```
 
-The dashboard displays assessment summaries, risk levels
-and individual scan details.
+The dashboard provides:
+
+- Overall scan summary.
+- Target-wise assessment results.
+- Detected PHP versions and their evidence.
+- Relevant HTTP response headers and cookie names.
+- Individual CVE assessment results.
+- End-of-life version warnings.
+- Redirect status and scope information.
+- Risk classifications.
+- Report details.
+
+The dashboard reads the generated scan reports from the `reports/` directory.
+
+---
 
 ## Running Automated Tests
 
-Run all tests:
+Run the complete test suite:
 
 ```bash
 python -m pytest -v
 ```
 
+The tests cover the scanner, PHP fingerprint detection, version comparison, CVE assessment, redirect handling, report generation, and discovery functionality.
+
+---
+
 ## Vulnerability Intelligence
 
-The current rules include:
+The current vulnerability rules include:
 
-- CVE-2026-109618
-- CVE-2026-109619
+- **CVE-2026-109618** — PHP Remote Code Execution via Out-of-Memory Corruption.
+- **CVE-2026-109619** — PHP Remote Code Execution via Stale Global State.
 
-The configured version thresholds are maintained in:
+The vulnerability rules are maintained in:
 
 ```text
 data/vulnerability_rules.json
 ```
 
-Refer to the official PHP security advisories:
+Each advisory is assessed independently using its configured fixed-version thresholds.
+
+The configuration also includes selected end-of-life PHP branches that require additional vendor verification.
+
+### Official Reference
+
+PHP security advisories:
 
 https://www.php.net/archive/2026.php
 
-## Security Disclaimer
+---
 
-This project is intended for authorized defensive security
-assessment and educational purposes.
+## Security Considerations and Limitations
 
-- Do not scan websites without permission.
-- A detected PHP version does not prove vulnerability.
-- Hosting providers may backport security fixes.
-- Hidden PHP version information does not mean a website
-  is secure.
-- The scanner does not exploit vulnerabilities.
-- Further DNS-rebinding and network security hardening
-  is required before production use.
+WebVuln Sentinel is intended for authorized defensive security assessment and educational purposes.
+
+- Do not scan websites without explicit permission.
+- A detected PHP version does not prove that a vulnerability is exploitable.
+- Hosting providers may backport security fixes without changing the publicly detected version.
+- Some websites do not expose PHP version information.
+- End-of-life PHP branches may require additional vendor-specific verification.
+- Cookie values and sensitive session data should not be exposed in assessment reports.
+- DNS validation and connection pinning reduce certain DNS-rebinding risks but do not constitute a complete production-grade network security solution.
+- The scanner does not execute exploits or perform intrusive vulnerability verification.
+
+The project remains a development prototype and requires further independent security review and deployment validation before production use.
+
+---
 
 ## Current Project Status
 
-Development prototype.
+**Status: Development Prototype**
 
-The current implementation supports authorized target
-validation, passive PHP indicator detection, configured
-CVE matching, preliminary risk assessment and JSON reporting.
+The current implementation supports:
 
-Further integration testing, security hardening and
-deployment validation are required.
+- Authorized target validation.
+- Passive PHP fingerprint detection.
+- PHP version identification.
+- Configurable CVE assessment.
+- End-of-life PHP branch identification.
+- Preliminary risk classification.
+- DNS validation and connection pinning.
+- Redirect scope protection.
+- Timestamped JSON report generation.
+- Interactive Streamlit dashboard.
+- Automated testing with pytest.
+
+Further integration testing, security review, and deployment validation are recommended.
+
+---
 
 ## License
 

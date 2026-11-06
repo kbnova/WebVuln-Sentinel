@@ -1,5 +1,5 @@
 
-"""Tests for PHP CVE matching."""
+"""Tests for independent PHP CVE matching."""
 
 from app.cve_checker import check_cves
 
@@ -36,6 +36,7 @@ def test_unsupported_branch_requires_review():
     for result in results:
         assert result["assessment"] == "INCONCLUSIVE"
         assert result["version_status"] == "REQUIRES_VENDOR_CHECK"
+        assert result["support_status"] == "UPSTREAM_EOL"
 
 
 def test_invalid_version_is_inconclusive():
@@ -44,3 +45,28 @@ def test_invalid_version_is_inconclusive():
     for result in results:
         assert result["assessment"] == "INCONCLUSIVE"
         assert result["version_status"] == "UNKNOWN"
+
+
+def test_cves_are_assessed_independently():
+    rules = {
+        "fixed_versions": {},
+        "advisories": [
+            {
+                "cve": "CVE-TEST-001",
+                "affected_versions": {
+                    "8.3": "8.3.20"
+                }
+            },
+            {
+                "cve": "CVE-TEST-002",
+                "affected_versions": {
+                    "8.3": "8.3.30"
+                }
+            }
+        ]
+    }
+
+    results = check_cves("8.3.25", rules)
+
+    assert results[0]["assessment"] == "NO_VERSION_MATCH_DISCLOSED"
+    assert results[1]["assessment"] == "POTENTIAL_VERSION_MATCH"

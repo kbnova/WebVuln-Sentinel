@@ -10,7 +10,6 @@ from app.report_generator import save_report
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TARGETS_FILE = BASE_DIR / "data" / "targets.txt"
-REPORT_FILE = BASE_DIR / "reports" / "results.json"
 
 
 def load_targets():
@@ -69,7 +68,8 @@ def main():
         print("-" * 55)
 
     try:
-        saved_path = save_report(results, REPORT_FILE)
+        saved_path = save_report(results)
+
         print("\nAssessment completed.")
         print(f"Report saved to: {saved_path}")
 
